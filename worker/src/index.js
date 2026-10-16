@@ -95,6 +95,82 @@ app.get("/api/search", async (c) => {
   return c.json(payload);
 });
 
+// 坐标反查地名: 供 app 在系统地理编码查不到时回落。
+// GET /api/reverse?lat=<纬度>&lon=<经度>
+//   转发 Nominatim 的 reverse 接口, 返回 {name, detail} (传入传出均为 WGS-84)。
+//   大陆设备的系统地理编码数据源是高德, 境外基本没有覆盖 —— 定位到首尔只能
+//   显示一串坐标, 补的就是这一块。搜索那边早有 /api/search 走这条路, 反查一直缺。
+//   缓存键把坐标截到 4 位小数(约 11 米): 再精细就没有命中率了, 而同一栋楼的
+//   不同角落本来也该是同一个地名。
+app.get("/api/reverse", async (c) => {
+  c.header("Access-Control-Allow-Origin", "*");
+  const lat = Number(c.req.query("lat"));
+  const lon = Number(c.req.query("lon"));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || !inRange(lat, lon)) {
+    return c.json({ name: "", detail: "" }, 400);
+  }
+
+  const cache = caches.default;
+  const cacheKey = new Request(
+    `https://wloc.reverse.cache/?at=${lat.toFixed(4)},${lon.toFixed(4)}`
+  );
+  const cached = await cache.match(cacheKey);
+  if (cached) return c.json(await cached.json());
+
+  // zoom=18 大致是「门牌 / 建筑」这一级, 再往下 Nominatim 也给不出更多东西。
+  const api =
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&lat=${lat}&lon=${lon}`;
+  let raw;
+  try {
+    const resp = await fetch(api, {
+      headers: {
+        // 同 /api/search: Nominatim 使用政策要求标识调用方, 不带会被拒。
+        "User-Agent": "wloc-ios-place-search/1.0",
+        // 带上中文, 境外地名也能返回「首尔特别市」而不是 Seoul。
+        "Accept-Language": "zh-CN,zh,en",
+      },
+    });
+    if (!resp.ok) return c.json({ name: "", detail: "" });
+    raw = await resp.json();
+  } catch {
+    return c.json({ name: "", detail: "" });
+  }
+
+  // 由近及远取第一个有值的: 路名最接近「我在哪」, 实在没有才退到行政区。
+  const a = (raw && raw.address) || {};
+  const name =
+    (raw && raw.name) ||
+    a.road ||
+    a.pedestrian ||
+    a.footway ||
+    a.neighbourhood ||
+    a.quarter ||
+    a.suburb ||
+    a.city_district ||
+    a.town ||
+    a.village ||
+    a.city ||
+    "";
+
+  const payload = {
+    name: String(name).trim(),
+    detail: String((raw && raw.display_name) || "").trim(),
+  };
+
+  c.executionCtx.waitUntil(
+    cache.put(
+      cacheKey,
+      new Response(JSON.stringify(payload), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "max-age=604800",
+        },
+      })
+    )
+  );
+  return c.json(payload);
+});
+
 // 兜底 500 也要带 CORS —— 否则快捷指令那边看到的是跨域错误, 而不是真正的原因。
 app.onError((e, c) => {
   c.header("Access-Control-Allow-Origin", "*");
