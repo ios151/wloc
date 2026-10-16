@@ -18,14 +18,17 @@ export function getPageHtml() {
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"><\/script>
 <style>
-:root { --blue:#007aff; --green:#34c759; --red:#ff3b30; --gray:#8e8e93; --bg:#f2f2f7; --orange:#ff9500; }
+/* iOS 网页拿不到名为 "SF Mono" 的字体, 只写它会回落成 Courier; ui-monospace 才映射到 SF Mono。 */
+:root { --blue:#007aff; --green:#34c759; --red:#ff3b30; --gray:#8e8e93; --bg:#f2f2f7; --orange:#ff9500; --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace; }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:-apple-system,system-ui,"SF Pro","Helvetica Neue",sans-serif; background:var(--bg); }
 #map { height:50vh; width:100%; min-height:250px; }
 .panel { padding:16px; max-width:600px; margin:0 auto; }
 .card { background:#fff; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); }
 .card h3 { font-size:15px; font-weight:600; margin-bottom:10px; }
-.coords { font-family:"SF Mono",monospace; font-size:14px; color:#333; padding:8px 12px; background:var(--bg); border-radius:8px; word-break:break-all; }
+.coords-row { display:flex; gap:8px; align-items:center; }
+.coords-row .coords { flex:1; min-width:0; }
+.coords { font-family:var(--mono); font-size:14px; color:#333; padding:8px 12px; background:var(--bg); border-radius:8px; word-break:break-all; }
 .row { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
 .btn { flex:1; min-width:100px; padding:12px 16px; border:none; border-radius:10px; font-size:14px; font-weight:500; cursor:pointer; transition:all .15s; }
 .btn-primary { background:var(--blue); color:#fff; }
@@ -40,19 +43,21 @@ body { font-family:-apple-system,system-ui,"SF Pro","Helvetica Neue",sans-serif;
 .input-row input { flex:1; padding:10px 12px; border:1px solid #d1d1d6; border-radius:8px; font-size:14px; outline:none; min-width:0; }
 .input-row input:focus { border-color:var(--blue); }
 .status { font-size:12px; color:var(--gray); margin-top:8px; text-align:center; }
+.repo-note { font-size:12px; color:var(--gray); margin-top:16px; text-align:center; line-height:1.5; }
+.repo-note a { color:var(--blue); text-decoration:none; white-space:nowrap; }
 .error-banner { background:var(--red); color:#fff; padding:14px 16px; border-radius:12px; margin-bottom:12px; font-size:14px; line-height:1.5; display:none; }
 .error-banner b { display:block; margin-bottom:4px; }
 .toast { position:fixed; top:60px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.8); color:#fff; padding:10px 20px; border-radius:20px; font-size:14px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:9999; max-width:90vw; text-align:center; }
 .toast.show { opacity:1; }
 .active-loc { background:var(--bg); border-radius:8px; padding:10px 12px; font-size:13px; color:#333; }
 .active-loc .label { font-size:11px; color:var(--gray); margin-bottom:4px; }
-.active-loc .value { font-family:"SF Mono",monospace; font-size:13px; }
+.active-loc .value { font-family:var(--mono); font-size:13px; }
 .fav-list { max-height:240px; overflow-y:auto; }
 .fav-item { display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--bg); border-radius:8px; margin-bottom:6px; cursor:pointer; transition:background .15s; }
 .fav-item:active { background:#e0e0e5; }
 .fav-item .fav-info { flex:1; min-width:0; }
 .fav-item .fav-name { font-size:14px; font-weight:500; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.fav-item .fav-coords { font-size:11px; color:var(--gray); font-family:"SF Mono",monospace; margin-top:2px; }
+.fav-item .fav-coords { font-size:11px; color:var(--gray); font-family:var(--mono); margin-top:2px; }
 .fav-item .fav-active { font-size:10px; color:var(--green); font-weight:600; }
 .fav-item .fav-del { flex:none; width:28px; height:28px; border:none; border-radius:50%; background:transparent; color:var(--red); font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s; }
 .fav-item .fav-del:hover { background:rgba(255,59,48,.1); }
@@ -97,7 +102,10 @@ body { font-family:-apple-system,system-ui,"SF Pro","Helvetica Neue",sans-serif;
   </div>
   <div class="card">
     <h3>选择目标位置</h3>
-    <div class="coords" id="coords">点击地图或使用下方工具选择位置</div>
+    <div class="coords-row">
+      <div class="coords" id="coords">点击地图或使用下方工具选择位置</div>
+      <button class="btn btn-sm btn-secondary" onclick="copyCoords()">复制</button>
+    </div>
     <div class="input-row" style="margin-top:10px">
       <label style="font-size:13px;color:var(--gray);display:flex;align-items:center;gap:6px;white-space:nowrap">扰动半径(米)
         <input id="radiusInput" type="number" min="0" max="5000" step="1" value="0" style="width:80px;flex:none" />
@@ -144,6 +152,7 @@ body { font-family:-apple-system,system-ui,"SF Pro","Helvetica Neue",sans-serif;
     </div>
   </div>
   <div class="status" id="status">选好位置后点击「储存到设备」写入代理工具</div>
+  <div class="repo-note">原仓库已被 GitHub 标记，新仓库：<a href="https://github.com/ios151/wloc-ios" target="_blank" rel="noopener">github.com/ios151/wloc-ios</a></div>
 </div>
 <div class="toast" id="toast"></div>
 <div class="modal-overlay" id="favModal">
@@ -182,7 +191,8 @@ let layerIsGcj = false;
 function toDisplay(la, lo) { return layerIsGcj ? wgs84ToGcj02(la, lo) : { lat: la, lon: lo }; }
 function fromDisplay(la, lo) { return layerIsGcj ? gcj02ToWgs84(la, lo) : { lat: la, lon: lo }; }
 
-const map = L.map('map').setView([lat, lon], 13);
+// worldCopyJump: 拖到旁边那份「世界副本」时跳回本体, 否则那里点出来的经度会是 473.9 这种值。
+const map = L.map('map', { worldCopyJump: true }).setView([lat, lon], 13);
 const tiles = {
   satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'ArcGIS'}),
   wgs84: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'ArcGIS WGS84'}),
@@ -208,8 +218,9 @@ function switchLayer(name) {
 let marker = L.marker([lat, lon], {draggable:true}).addTo(map);
 
 // 地图交互给出的都是「屏幕坐标系」的读数, 一律先过 fromDisplay 再进 setPos。
-marker.on('dragend', e => { const p=e.target.getLatLng(); setPosFromDisplay(p.lat, p.lng); });
-map.on('click', e => { setPosFromDisplay(e.latlng.lat, e.latlng.lng); });
+// wrap() 把经度折回 [-180, 180]: 越界的经度存不进去, 模块会直接拒收。
+marker.on('dragend', e => { const p=e.target.getLatLng().wrap(); setPosFromDisplay(p.lat, p.lng); });
+map.on('click', e => { const p=e.latlng.wrap(); setPosFromDisplay(p.lat, p.lng); });
 
 function setPosFromDisplay(dLat, dLon) {
   const w = fromDisplay(dLat, dLon);
@@ -221,7 +232,30 @@ function setPos(newLat, newLon) {
   lat = newLat; lon = newLon; selected = true;
   const d = toDisplay(lat, lon);
   marker.setLatLng([d.lat, d.lon]);
-  document.getElementById('coords').textContent = '经度 ' + lon.toFixed(6) + '  纬度 ' + lat.toFixed(6);
+  document.getElementById('coords').textContent = fmtCoord(lat, lon);
+}
+
+// 页面上所有坐标都按「纬度, 经度」显示, 与 Apple/Google 地图一致, 也与 parseMapUrl 在
+// 分不清时的默认顺序一致。两边顺序不一样的话, 欧洲这类经纬度都小于 90 的地点, 复制
+// 显示的坐标再粘回来就会被读反, 落到几千公里外。
+function fmtCoord(la, lo, digits) {
+  const n = digits || 6;
+  return la.toFixed(n) + ', ' + lo.toFixed(n);
+}
+
+// 与 parse.js 的 inRange 同义。
+function inRange(la, lo) {
+  return Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180;
+}
+
+function copyCoords() {
+  if (!selected) { toast('请先在地图上选择一个位置'); return; }
+  const text = fmtCoord(lat, lon);
+  if (!navigator.clipboard) { toast('当前浏览器不支持复制', 3000); return; }
+  navigator.clipboard.writeText(text).then(
+    () => toast('已复制: ' + text),
+    () => toast('复制失败', 3000)
+  );
 }
 
 function moveTo(newLat, newLon, zoom) {
@@ -230,10 +264,13 @@ function moveTo(newLat, newLon, zoom) {
   map.setView([d.lat, d.lon], zoom || 15);
 }
 
+let toastTimer = 0;
 function toast(msg, ms) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), ms || 2500);
+  // 连续调用时 (「解析中...」紧跟着结果), 不清掉上一条的定时器, 新消息会被它提前收起。
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), ms || 2500);
 }
 
 function showError(show) {
@@ -262,7 +299,7 @@ function renderFavs() {
     return '<div class="fav-item" onclick="loadFav(' + i + ')">' +
       '<div class="fav-info">' +
         '<div class="fav-name">' + escHtml(f.name) + '<\\/div>' +
-        '<div class="fav-coords">' + f.lon.toFixed(6) + ', ' + f.lat.toFixed(6) + '<\\/div>' +
+        '<div class="fav-coords">' + fmtCoord(f.lat, f.lon) + '<\\/div>' +
         (isActive ? '<div class="fav-active">\\u2713 当前生效<\\/div>' : '') +
       '<\\/div>' +
       '<button class="fav-del" onclick="event.stopPropagation();delFav(' + i + ')" title="删除">\\u00d7<\\/button>' +
@@ -276,7 +313,7 @@ function escHtml(s) {
 
 function addFav() {
   if (!selected) { toast('请先在地图上选择一个位置'); return; }
-  document.getElementById('favModalCoords').textContent = lon.toFixed(6) + ', ' + lat.toFixed(6);
+  document.getElementById('favModalCoords').textContent = fmtCoord(lat, lon);
   document.getElementById('favNameInput').value = '';
   document.getElementById('favModal').classList.add('show');
   setTimeout(() => document.getElementById('favNameInput').focus(), 100);
@@ -301,7 +338,7 @@ function loadFav(i) {
   const favs = getFavs();
   if (!favs[i]) return;
   moveTo(favs[i].lat, favs[i].lon, 15);
-  toast(favs[i].name + ' (' + favs[i].lon.toFixed(4) + ', ' + favs[i].lat.toFixed(4) + ')');
+  toast(favs[i].name + ' (' + fmtCoord(favs[i].lat, favs[i].lon, 4) + ')');
 }
 
 function delFav(i) {
@@ -322,6 +359,19 @@ function clearAllFav() {
 }
 
 /* ---- Active location query ---- */
+// d 是模块 query / save 的响应。save 的响应不带 updatedAt, 这时按「刚写入」取当前时间。
+function renderActive(d) {
+  activeLon = parseFloat(d.longitude);
+  activeLat = parseFloat(d.latitude);
+  const rr = Number(d.randomRadius) || 0;
+  const at = d.updatedAt ? new Date(d.updatedAt) : new Date();
+  document.getElementById('activeValue').textContent = fmtCoord(activeLat, activeLon) +
+    (d.accuracy ? '  精度 ' + d.accuracy + 'm' : '') +
+    (rr ? '  扰动 ' + rr + 'm' : '') +
+    (isNaN(at) ? '' : '  \\u00b7 ' + at.toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false }));
+  renderFavs();
+}
+
 function queryActive() {
   const el = document.getElementById('activeValue');
   el.textContent = '查询中...';
@@ -329,15 +379,11 @@ function queryActive() {
     .then(r => r.json())
     .then(d => {
       if (d.success && d.longitude && d.latitude) {
-        activeLon = parseFloat(d.longitude);
-        activeLat = parseFloat(d.latitude);
-        const rr = d.randomRadius || 0;
-        el.textContent = '经度 ' + activeLon.toFixed(6) + '  纬度 ' + activeLat.toFixed(6) + (d.accuracy ? '  精度 ' + d.accuracy + 'm' : '') + (rr ? '  扰动 ' + rr + 'm' : '');
-        document.getElementById('radiusInput').value = rr;
-        renderFavs();
+        renderActive(d);
+        document.getElementById('radiusInput').value = Number(d.randomRadius) || 0;
       } else {
         activeLon = null; activeLat = null;
-        el.textContent = '无已保存的坐标';
+        el.textContent = d.error || '无已保存的坐标';
         renderFavs();
       }
     })
@@ -362,33 +408,44 @@ function clearActive() {
 }
 
 /* ---- Save to device ---- */
+function resetSaveBtn() {
+  const btn = document.getElementById('saveBtn');
+  btn.textContent = '储存到设备'; btn.className = 'btn btn-primary'; btn.disabled = false;
+}
+
 async function save() {
   if (!selected) { toast('请先在地图上选择一个位置'); return; }
+  if (!inRange(lat, lon)) { toast('坐标超出合法范围', 3000); return; }
   const btn = document.getElementById('saveBtn');
   btn.textContent = '储存中...'; btn.disabled = true;
   showError(false);
+  const radius = parseInt(document.getElementById('radiusInput').value) || 0;
+  let d = null;
   try {
-    const radius = parseInt(document.getElementById('radiusInput').value) || 0;
     const r = await fetch(SAVE_API + '?lon=' + lon + '&lat=' + lat + '&acc=25&randomRadius=' + radius, {
       method: 'GET', mode: 'cors', cache: 'no-store'
     });
-    const d = await r.json();
-    if (d.success) {
-      activeLon = lon; activeLat = lat;
-      btn.textContent = '\\u2713 已储存'; btn.className = 'btn btn-primary success';
-      document.getElementById('status').textContent = '\\u2713 已写入: ' + lon.toFixed(6) + ', ' + lat.toFixed(6) + ' \\u00b7 ' + new Date().toLocaleTimeString('zh-CN');
-      document.getElementById('activeValue').textContent = '经度 ' + lon.toFixed(6) + '  纬度 ' + lat.toFixed(6) + '  精度 25m';
-      renderFavs();
-      toast('\\u2713 坐标已写入设备，下次定位生效');
-      setTimeout(() => { btn.textContent='储存到设备'; btn.className='btn btn-primary'; btn.disabled=false; }, 2500);
-    } else {
-      throw new Error(d.error || '写入失败');
-    }
-  } catch(e) {
-    btn.textContent = '储存到设备'; btn.className = 'btn btn-primary'; btn.disabled = false;
+    d = await r.json();
+  } catch(e) {}
+  // 拿不到模块格式的 JSON (请求没被代理拦下、跨域失败、回来的不是 JSON) 才算「模块未生效」。
+  // 模块回了 success:false 说明它在工作, 只是拒绝了这次写入: 把原因给用户, 不弹排障横幅。
+  if (!d || typeof d.success !== 'boolean') {
+    resetSaveBtn();
     showError(true);
     toast('\\u2717 储存失败 - 请检查模块配置', 4000);
+    return;
   }
+  if (!d.success) {
+    resetSaveBtn();
+    toast('\\u2717 储存失败: ' + (d.error || '模块拒绝写入'), 4000);
+    return;
+  }
+  btn.textContent = '\\u2713 已储存'; btn.className = 'btn btn-primary success';
+  document.getElementById('status').textContent = '\\u2713 已写入: ' + fmtCoord(lat, lon) + ' \\u00b7 ' + new Date().toLocaleTimeString('zh-CN');
+  // 旧版模块的响应可能缺这几个字段, 缺的用本次请求的值补上。
+  renderActive(Object.assign({ longitude: lon, latitude: lat, accuracy: 25, randomRadius: radius }, d));
+  toast('\\u2713 坐标已写入设备，下次定位生效');
+  setTimeout(resetSaveBtn, 2500);
 }
 
 function locateMe() {
@@ -446,14 +503,16 @@ async function parseUrl() {
       return;
     }
     moveTo(data.lat, data.lon, 15);
-    toast(data.name ? '已解析: ' + data.name : '已解析: ' + data.lon.toFixed(4) + ', ' + data.lat.toFixed(4));
+    toast(data.name ? '已解析: ' + data.name : '已解析: ' + fmtCoord(data.lat, data.lon, 4));
     return;
   }
 
   const result = parseMapUrl(input);
   if (!result) { toast('无法解析坐标，请检查链接格式', 3000); return; }
+  // 服务端那条路在出口校验过值域, 本地解析这条没有: 「200.5, 300.1」这种输入要在这里拦下。
+  if (!inRange(result.lat, result.lon)) { toast('坐标超出合法范围', 3000); return; }
   moveTo(result.lat, result.lon, 15);
-  toast('已解析: ' + result.lon.toFixed(4) + ', ' + result.lat.toFixed(4));
+  toast('已解析: ' + fmtCoord(result.lat, result.lon, 4));
 }
 
 async function searchPlace() {
@@ -471,10 +530,14 @@ async function searchPlace() {
 }
 
 document.addEventListener('paste', e => {
+  const input = document.getElementById('urlInput');
+  const t = e.target;
+  // 只接管两种粘贴: 粘进链接框, 或粘在页面空白处。往扰动半径、收藏名、搜索框里粘贴是在
+  // 填那个框, 不能抢去当链接解析 —— 否则在半径框里粘个 "12.5" 也会触发解析并报错。
+  if (t !== input && t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   const text = (e.clipboardData||window.clipboardData).getData('text');
   if (!text) return;
   if (!(text.includes('map') || text.includes('loc') || text.includes('lnglat') || /[0-9]+\\.[0-9]+/.test(text))) return;
-  const input = document.getElementById('urlInput');
   // 粘贴目标本来就是这个输入框时, 让浏览器原生插入即可; 此处再赋一次值,
   // 原生插入会叠加在后面, 结果是同一段文本出现两遍。
   if (e.target !== input) input.value = text;
