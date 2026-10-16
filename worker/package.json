@@ -1,11 +1,11 @@
 {
   "type": "module",
   "scripts": {
-    "test": "node --test 'test/*.test.mjs'",
+    "test": "node --test \"test/*.test.mjs\"",
     "dev": "npx wrangler dev",
     "deploy": "npx wrangler deploy --minify",
     "pages:dev": "npx wrangler pages dev --port 8787 -c wrangler.pages.jsonc",
-    "pages:deploy": "npx wrangler pages deploy -c wrangler.pages.jsonc"
+    "pages:deploy": "npx wrangler pages deploy dist --project-name wloc-pages --branch main"
   },
   "dependencies": {
     "hono": "^4.10.6"
